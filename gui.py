@@ -1,11 +1,10 @@
-import json
 import tkinter as tk
 from get_weather import Weather
+import urllib.request
+import os
 
-from geopy.geocoders.base import Geocoder
 from tkintermapview import TkinterMapView
 from geopy.geocoders import Nominatim
-from geopy import geocoders
 
 class GUI:
     def __init__(self):
@@ -13,14 +12,13 @@ class GUI:
         self.root.geometry("800x600")
         self.root.config(background="#00b4d8")
         self.root.title("Simple Weather App")
-
+        self.icon = tk.PhotoImage(file="icons/icons8-weather-forecast-100.png")
+        self.root.iconphoto(True, self.icon)
         self.last_lat = 50.037379
         self.last_lon = 22.005030
         self.weather = Weather()
         self.ui_design()
         self.root.mainloop()
-
-
 
     def ui_design(self):
         self.main_frame = tk.Frame(self.root)
@@ -58,12 +56,7 @@ class GUI:
 
         self.button_search = tk.Button(self.main_frame, text="Search",command=self.search_for_coords,highlightbackground="#00b4d8", activebackground="#0096c7")
         self.button_search.grid(row=0, column=4, columnspan=4, )
-
-        self.image_sunny = tk.PhotoImage(file="images/sunny.png")
-        self.image_cloudy = tk.PhotoImage(file="images/cloudy.png")
-        self.image_rainy = tk.PhotoImage(file="images/rainy.png")
-        self.image_snowy = tk.PhotoImage(file="images/snowy.png")
-
+        self.entry_city.focus_set()
 
     def open_map(self):
         map_window = tk.Toplevel(self.root)
@@ -76,8 +69,12 @@ class GUI:
 
         map_view = TkinterMapView(map_window)
         map_view.set_position(self.last_lat, self.last_lon)
-        map_view.set_zoom(10.0)
+        map_view.set_zoom(10)
         map_view.grid(row=0, column=0, sticky="nsew")
+        self.entry_city.delete(0, tk.END)
+        self.entry_zip_code.delete(0, tk.END)
+        if hasattr(self, "previous_button") and self.previous_button:
+            self.previous_button.destroy()
 
         def click(coords):
             lat, lon = coords
@@ -100,16 +97,20 @@ class GUI:
 
         def close_map():
             map_window.destroy()
-            weather_data = self.weather.get_weather(self.last_lat, self.last_lon)
-
+            self.show_weather()
 
         button_close = tk.Button(map_window, text="Close and Save", command=close_map)
         button_close.grid(row=1, column=0, sticky="e", pady=(4, 4), padx=10)
 
+        self.button_next_page = tk.Button(self.main_frame, text="Next",command=self.next_page, highlightbackground="#00b4d8",
+                                          activebackground="#0096c7")
+        self.button_next_page.place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
+
     def search_for_coords(self):
         city_text = self.entry_city.get().strip()
         zip_text = self.entry_zip_code.get().strip()
-
+        self.entry_city.delete(0, "end")
+        self.entry_zip_code.delete(0, "end")
         if not city_text and not zip_text:
             self.label_picked_city.config(text="Enter a city or zip code")
             return
@@ -133,133 +134,92 @@ class GUI:
             self.label_picked_city.config(text="Error connecting to geocoder")
 
         self.show_weather()
+        if hasattr(self, "previous_button") and self.previous_button:
+            self.previous_button.destroy()
+        self.button_next_page = tk.Button(self.main_frame, text="Next",command=self.next_page,highlightbackground="#00b4d8",
+                                          activebackground="#0096c7")
+        self.button_next_page.place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
 
     def show_weather(self):
         weather_data = self.weather.get_weather(self.last_lat, self.last_lon)
-        print(weather_data)
 
-        # Prognoza 1 (indeks 0)
-        temp_current = int(weather_data["list"][0]["main"]["temp"])
-        weather_current = weather_data["list"][0]["weather"][0]["main"]
-        weather_current_description = weather_data["list"][0]["weather"][0]["description"]
-        weather_current_time = weather_data["list"][0]["dt_txt"].split()[1][:5]
+        def get_icon_image(icon_code):
+            # OpenWeatherMap icon URL template
+            icon_url = f"http://openweathermap.org/img/wn/{icon_code}@2x.png"
+            # Download the icon image
+            os.makedirs("icons", exist_ok=True)
+            icon_path = os.path.join("icons", f"{icon_code}.png")
+            urllib.request.urlretrieve(icon_url, icon_path)
+            return tk.PhotoImage(file=icon_path)
 
-        current_time_label = tk.Label(self.main_frame, text=f"{weather_current_time}", bg="#00b4d8", fg="black")
-        current_time_label.grid(row=5, column=0, sticky="nsew")
-        current_label = tk.Label(self.main_frame, text=f"Temperature: {temp_current}C", bg="#00b4d8", fg="black")
-        current_label.grid(row=6, column=0)
+        for i in range(5):
+            temp_current = int(weather_data["list"][i]["main"]["temp"])
+            weather_current_description = weather_data["list"][i]["weather"][0]["description"]
+            weather_current_time = weather_data["list"][i]["dt_txt"].split()[1][:5]
+            icon_code = weather_data["list"][i]["weather"][0]["icon"]
+            icon_image = get_icon_image(icon_code)
 
-        if weather_current == "Rain":
-            image = self.image_rainy
-        elif weather_current == "Clouds":
-            image = self.image_cloudy
-        elif weather_current == "Snow":
-            image = self.image_snowy
-        elif weather_current == "Clear":
-            image = self.image_sunny
-        else:
-            image = self.image_sunny
+            current_time_label = tk.Label(self.main_frame, text=f"{weather_current_time}", bg="#00b4d8", fg="black")
+            current_time_label.grid(row=5, column=i, sticky="nsew")
+            current_label = tk.Label(self.main_frame, text=f"Temperature: {temp_current}°C", bg="#00b4d8", fg="black")
+            current_label.grid(row=6, column=i)
+            weather_description_label = tk.Label(self.main_frame,text=f"{weather_current_description.capitalize()}", bg="#00b4d8",fg="black")
+            weather_description_label.grid(row=7, column=i)
 
-        self.current_weather_label = tk.Label(self.main_frame, image=image, bg="#00b4d8", pady=40)
-        self.current_weather_label.grid(row=4, column=0)
+            label = tk.Label(self.main_frame, image=icon_image, bg="#00b4d8", pady=20)
+            label.image = icon_image  # Keep a reference
+            label.grid(row=4, column=i)
 
-        # Prognoza 2 (indeks 1)
-        temp_current_1 = int(weather_data["list"][1]["main"]["temp"])
-        weather_current_1 = weather_data["list"][1]["weather"][0]["main"]
-        weather_current_description_1 = weather_data["list"][1]["weather"][0]["description"]
-        weather_current_time_1 = weather_data["list"][1]["dt_txt"].split()[1][:5]
 
-        current_time_label_1 = tk.Label(self.main_frame, text=f"{weather_current_time_1}", bg="#00b4d8", fg="black")
-        current_time_label_1.grid(row=5, column=1, sticky="nsew")
-        current_label_1 = tk.Label(self.main_frame, text=f"Temperature: {temp_current_1}C", bg="#00b4d8", fg="black")
-        current_label_1.grid(row=6, column=1)
+    def next_page(self):
+        weather_data = self.weather.get_weather(self.last_lat, self.last_lon)
 
-        if weather_current_1 == "Rain":
-            image = self.image_rainy
-        elif weather_current_1 == "Clouds":
-            image = self.image_cloudy
-        elif weather_current_1 == "Snow":
-            image = self.image_snowy
-        elif weather_current_1 == "Clear":
-            image = self.image_sunny
-        else:
-            image = self.image_sunny
+        # Clear previously displayed labels in rows 4, 5, 6, 7 and columns 0-4
+        for widget in self.main_frame.grid_slaves():
+            if int(widget.grid_info()["row"]) in (4, 5, 6, 7) and int(widget.grid_info()["column"]) in range(5):
+                widget.destroy()
 
-        self.current_weather_label_1 = tk.Label(self.main_frame, image=image, bg="#00b4d8", pady=20)
-        self.current_weather_label_1.grid(row=4, column=1)
+        def get_icon_image(icon_code):
+            # OpenWeatherMap icon URL
+            icon_url = f"http://openweathermap.org/img/wn/{icon_code}@2x.png"
+            # Download the icon image
+            os.makedirs("icons", exist_ok=True)
+            icon_path = os.path.join("icons", f"{icon_code}.png")
+            urllib.request.urlretrieve(icon_url, icon_path)
+            return tk.PhotoImage(file=icon_path)
 
-        # Prognoza 3 (indeks 2)
-        temp_current_2 = int(weather_data["list"][2]["main"]["temp"])
-        weather_current_2 = weather_data["list"][2]["weather"][0]["main"]
-        weather_current_description_2 = weather_data["list"][2]["weather"][0]["description"]
-        weather_current_time_2 = weather_data["list"][2]["dt_txt"].split()[1][:5]
+        for i in range(5,10):
+            temp_current = int(weather_data["list"][i]["main"]["temp"])
+            weather_current_description = weather_data["list"][i]["weather"][0]["description"]
+            weather_current_time = weather_data["list"][i]["dt_txt"].split()[1][:5]
+            icon_code = weather_data["list"][i]["weather"][0]["icon"]
+            icon_image = get_icon_image(icon_code)
 
-        current_time_label_2 = tk.Label(self.main_frame, text=f"{weather_current_time_2}", bg="#00b4d8", fg="black")
-        current_time_label_2.grid(row=5, column=2, sticky="nsew")
-        current_label_2 = tk.Label(self.main_frame, text=f"Temperature: {temp_current_2}C", bg="#00b4d8", fg="black")
-        current_label_2.grid(row=6, column=2)
+            current_time_label = tk.Label(self.main_frame, text=f"{weather_current_time}", bg="#00b4d8", fg="black")
+            current_time_label.grid(row=5, column=i-5, sticky="nsew")
+            current_label = tk.Label(self.main_frame, text=f"Temperature: {temp_current}°C", bg="#00b4d8", fg="black")
+            current_label.grid(row=6, column=i-5)
+            weather_description_label = tk.Label(self.main_frame, text=f"{weather_current_description.capitalize()}", bg="#00b4d8",
+                                                 fg="black")
+            weather_description_label.grid(row=7, column=i-5)
 
-        if weather_current_2 == "Rain":
-            image = self.image_rainy
-        elif weather_current_2 == "Clouds":
-            image = self.image_cloudy
-        elif weather_current_2 == "Snow":
-            image = self.image_snowy
-        elif weather_current_2 == "Clear":
-            image = self.image_sunny
-        else:
-            image = self.image_sunny
+            label = tk.Label(self.main_frame, image=icon_image, bg="#00b4d8", pady=20)
+            label.image = icon_image  # Keep a reference
+            label.grid(row=4, column=i-5)
 
-        self.current_weather_label_2 = tk.Label(self.main_frame, image=image, bg="#00b4d8", pady=20)
-        self.current_weather_label_2.grid(row=4, column=2)
+        self.button_next_page.destroy()
+        self.previous_button = tk.Button(self.main_frame,text="Previous",command=self.previous_page,highlightbackground="#00b4d8",
+                                          activebackground="#0096c7")
+        self.previous_button.place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
 
-        # Prognoza 4 (indeks 3)
-        temp_current_3 = int(weather_data["list"][3]["main"]["temp"])
-        weather_current_3 = weather_data["list"][3]["weather"][0]["main"]
-        weather_current_description_3 = weather_data["list"][3]["weather"][0]["description"]
-        weather_current_time_3 = weather_data["list"][3]["dt_txt"].split()[1][:5]
 
-        current_time_label_3 = tk.Label(self.main_frame, text=f"{weather_current_time_3}", bg="#00b4d8", fg="black")
-        current_time_label_3.grid(row=5, column=3, sticky="nsew")
-        current_label_3 = tk.Label(self.main_frame, text=f"Temperature: {temp_current_3}C", bg="#00b4d8", fg="black")
-        current_label_3.grid(row=6, column=3)
+    def previous_page(self):
+        self.show_weather()
+        self.previous_button.destroy()
+        self.button_next_page = tk.Button(self.main_frame, text="Next", command=self.next_page,
+                                          highlightbackground="#00b4d8",
+                                          activebackground="#0096c7")
+        self.button_next_page.place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
 
-        if weather_current_3 == "Rain":
-            image = self.image_rainy
-        elif weather_current_3 == "Clouds":
-            image = self.image_cloudy
-        elif weather_current_3 == "Snow":
-            image = self.image_snowy
-        elif weather_current_3 == "Clear":
-            image = self.image_sunny
-        else:
-            image = self.image_sunny
-
-        self.current_weather_label_3 = tk.Label(self.main_frame, image=image, bg="#00b4d8", pady=20)
-        self.current_weather_label_3.grid(row=4, column=3)
-
-        # Prognoza 5 (indeks 4)
-        temp_current_4 = int(weather_data["list"][4]["main"]["temp"])
-        weather_current_4 = weather_data["list"][4]["weather"][0]["main"]
-        weather_current_description_4 = weather_data["list"][4]["weather"][0]["description"]
-        weather_current_time_4 = weather_data["list"][4]["dt_txt"].split()[1][:5]
-
-        current_time_label_4 = tk.Label(self.main_frame, text=f"{weather_current_time_4}", bg="#00b4d8", fg="black")
-        current_time_label_4.grid(row=5, column=4, sticky="nsew")
-        current_label_4 = tk.Label(self.main_frame, text=f"Temperature: {temp_current_4}C", bg="#00b4d8", fg="black")
-        current_label_4.grid(row=6, column=4)
-
-        if weather_current_4 == "Rain":
-            image = self.image_rainy
-        elif weather_current_4 == "Clouds":
-            image = self.image_cloudy
-        elif weather_current_4 == "Snow":
-            image = self.image_snowy
-        elif weather_current_4 == "Clear":
-            image = self.image_sunny
-        else:
-            image = self.image_sunny
-
-        self.current_weather_label_4 = tk.Label(self.main_frame, image=image, bg="#00b4d8", pady=20)
-        self.current_weather_label_4.grid(row=4, column=4)
-
+if __name__ == "__main__":
+    app = GUI()
