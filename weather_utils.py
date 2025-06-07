@@ -4,9 +4,10 @@ import os
 from geopy.geocoders import Nominatim
 
 
+
 class Weather:
     def __init__(self):
-        self.api_key = "6351d5b8402729dd6d182fc6d4dc4a06"
+        self.api_key = "YOUR_API_KEY_HERE"
         self.lang = "en"
         self.units = "metric"
         self.geolocator = Nominatim(user_agent="weather-app")
@@ -18,7 +19,6 @@ class Weather:
         return response.json()
 
     def get_location_from_coords(self, lat, lon):
-        """Zwraca informacje o lokalizacji na podstawie współrzędnych"""
         try:
             location = self.geolocator.reverse((lat, lon), language="en")
             if location and location.address:
@@ -48,7 +48,6 @@ class Weather:
             }
 
     def get_coords_from_query(self, city_text, zip_text):
-        """Zwraca współrzędne na podstawie nazwy miasta lub kodu pocztowego"""
         if not city_text and not zip_text:
             return {"success": False, "error": "Enter a city or zip code"}
 
@@ -72,12 +71,10 @@ class Weather:
             return {"success": False, "error": "Error connecting to geocoder"}
 
     def download_weather_icon(self, icon_code):
-        """Pobiera ikonę pogody z OpenWeatherMap"""
         icon_url = f"http://openweathermap.org/img/wn/{icon_code}@2x.png"
         os.makedirs("icons", exist_ok=True)
         icon_path = os.path.join("icons", f"{icon_code}.png")
 
-        # Pobierz tylko jeśli nie istnieje
         if not os.path.exists(icon_path):
             try:
                 urllib.request.urlretrieve(icon_url, icon_path)
@@ -88,7 +85,6 @@ class Weather:
         return icon_path
 
     def get_weather_data_for_display(self, lat, lon, start_index=0, count=5):
-        """Zwraca przetworzone dane pogodowe gotowe do wyświetlenia"""
         try:
             weather_data = self.get_weather(lat, lon)
             processed_data = []

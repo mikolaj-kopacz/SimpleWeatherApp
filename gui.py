@@ -1,6 +1,7 @@
 import tkinter as tk
 from weather_utils import Weather
 from tkintermapview import TkinterMapView
+from last_location import LastLocation
 
 
 class GUI:
@@ -14,7 +15,16 @@ class GUI:
         self.last_lat = 50.037379
         self.last_lon = 22.005030
         self.weather = Weather()
+        self.last_location = LastLocation()
         self.ui_design()
+        last_loc = self.last_location.load()
+        if last_loc:
+            self.last_lat = last_loc["lat"]
+            self.last_lon = last_loc["lon"]
+            self.city = last_loc.get("city", "")
+            self.zipcode = last_loc.get("zipcode", "")
+            self.label_picked_city.config(text=f"{self.city} {self.zipcode}".strip())
+            self.show_weather()
         self.root.mainloop()
 
     def ui_design(self):
@@ -79,10 +89,12 @@ class GUI:
             self.last_lat = lat
             self.last_lon = lon
 
-            # Użyj logiki z weather_utils
             location_info = self.weather.get_location_from_coords(lat, lon)
             self.label_picked_city.config(text=location_info["display_text"])
             map_view.set_position(lat, lon)
+            city = location_info.get("city", "")
+            zipcode = location_info.get("zipcode", "")
+            self.last_location.save(city, zipcode, lat, lon)
 
         map_view.add_left_click_map_command(click)
 
@@ -103,16 +115,18 @@ class GUI:
         self.entry_city.delete(0, "end")
         self.entry_zip_code.delete(0, "end")
 
-        # Użyj logiki z weather_utils
         result = self.weather.get_coords_from_query(city_text, zip_text)
 
         if result["success"]:
             self.last_lat = result["lat"]
             self.last_lon = result["lon"]
-            self.city = result.get("city", "")
-            self.zipcode = result.get("zipcode", "")
+            city = result.get("city", "")
+            zipcode = result.get("zipcode", "")
+            self.city = city
+            self.zipcode = zipcode
             self.label_picked_city.config(text=result["display_text"])
             self.show_weather()
+            self.last_location.save(city, zipcode, self.last_lat, self.last_lon)
 
             if hasattr(self, "previous_button") and self.previous_button:
                 self.previous_button.destroy()
@@ -123,31 +137,25 @@ class GUI:
             self.label_picked_city.config(text=result["error"])
 
     def clear_weather_display(self):
-        """Czyści wyświetlane dane pogodowe"""
         for widget in self.main_frame.grid_slaves():
             if int(widget.grid_info()["row"]) in (4, 5, 6, 7) and int(widget.grid_info()["column"]) in range(5):
                 widget.destroy()
 
     def display_weather_data(self, weather_data, start_col=0):
-        """Pomocnicza metoda do wyświetlania danych pogody"""
         for i, data in enumerate(weather_data):
             col = start_col + i
 
-            # Wyświetl czas
             current_time_label = tk.Label(self.main_frame, text=f"{data['time']}", bg="#00b4d8", fg="black")
             current_time_label.grid(row=5, column=col, sticky="nsew")
 
-            # Wyświetl temperaturę
             current_label = tk.Label(self.main_frame, text=f"Temperature: {data['temperature']}°C",
                                      bg="#00b4d8", fg="black")
             current_label.grid(row=6, column=col)
 
-            # Wyświetl opis
             weather_description_label = tk.Label(self.main_frame, text=f"{data['description']}",
                                                  bg="#00b4d8", fg="black")
             weather_description_label.grid(row=7, column=col)
 
-            # Wyświetl ikonę
             if data['icon_path']:
                 icon_image = tk.PhotoImage(file=data['icon_path'])
                 label = tk.Label(self.main_frame, image=icon_image, bg="#00b4d8", pady=20)
@@ -155,7 +163,6 @@ class GUI:
                 label.grid(row=4, column=col)
 
     def show_weather(self):
-        # Pobierz przetworzone dane z weather_utils
         result = self.weather.get_weather_data_for_display(self.last_lat, self.last_lon, 0, 5)
 
         if result["success"]:
@@ -164,29 +171,23 @@ class GUI:
             self.label_picked_city.config(text=f"Error: {result.get('error', 'Unknown error')}")
 
     def next_page(self):
-        # Wyczyść poprzednie dane
         self.clear_weather_display()
 
-        # Pobierz dane dla kolejnych 5 godzin
         result = self.weather.get_weather_data_for_display(self.last_lat, self.last_lon, 5, 5)
 
         if result["success"]:
             self.display_weather_data(result["data"])
 
-        # Zmień przyciski
         self.button_next_page.destroy()
         self.previous_button = tk.Button(self.main_frame, text="Previous", command=self.previous_page,
                                          highlightbackground="#00b4d8", activebackground="#0096c7")
         self.previous_button.place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
 
     def previous_page(self):
-        # Wyczyść poprzednie dane
         self.clear_weather_display()
 
-        # Pokaż pierwsze 5 godzin
         self.show_weather()
 
-        # Zmień przyciski
         self.previous_button.destroy()
         self.button_next_page = tk.Button(self.main_frame, text="Next", command=self.next_page,
                                           highlightbackground="#00b4d8", activebackground="#0096c7")
